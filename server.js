@@ -2,74 +2,73 @@ require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
 const path = require("path");
-const cloudinary = require("cloudinary").v2;
 const multer = require("multer");
+const fs = require("fs");
 
 const app = express();
 const PORT = process.env.PORT || 5000;
-
-// Configuração do Cloudinary
-cloudinary.config({
-  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-  api_key: process.env.CLOUDINARY_API_KEY,
-  api_secret: process.env.CLOUDINARY_API_SECRET,
-});
 
 // Middleware
 app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, "public")));
 
-// Configuração do multer para lidar com arquivos recebidos
-const upload = multer({ storage: multer.memoryStorage() });
+// Configuração do multer para salvar arquivos na pasta local
+const uploadPath = path.join(__dirname, "uploads");
+if (!fs.existsSync(uploadPath)) {
+  fs.mkdirSync(uploadPath); // Cria a pasta 'uploads' se ela não existir
+}
+
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, uploadPath); // Salva os arquivos na pasta 'uploads'
+  },
+  filename: (req, file, cb) => {
+    const uniqueSuffix = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
+    cb(null, `${uniqueSuffix}-${file.originalname}`); // Define um nome único para cada arquivo
+  },
+});
+
+const upload = multer({ storage });
 
 // Rota para upload de múltiplas imagens
-app.post("/upload", upload.array("files", 100), async (req, res) => {
+app.post("/upload", upload.array("files", 100), (req, res) => {
   if (!req.files || req.files.length === 0) {
     return res.status(400).json({ error: "Nenhum arquivo foi enviado!" });
   }
 
   try {
-    const uploadedFiles = [];
-    for (const file of req.files) {
-      const result = await cloudinary.uploader.upload_stream(
-        { folder: "wedding-day" },
-        (error, result) => {
-          if (error) {
-            throw new Error("Erro ao fazer upload");
-          }
-          uploadedFiles.push({ url: result.secure_url, filename: result.public_id });
-        }
-      );
-      result.end(file.buffer);
-    }
+    const uploadedFiles = req.files.map((file) => ({
+      url: `/uploads/${file.filename}`, 
+      filename: file.filename,
+    }));
 
     res.status(200).redirect("/");
   } catch (error) {
-    res.status(500).json({ error: "Erro ao fazer upload das imagens." });
+    console.error("Erro ao salvar as imagens:", error);
+    res.status(500).json({ error: "Erro ao salvar as imagens." });
   }
 });
 
 // Rota para obter as imagens já enviadas
-app.get("/get-images", async (req, res) => {
+app.get("/get-images", (req, res) => {
   try {
-    const result = await cloudinary.api.resources({
-      type: "upload",
-      prefix: "wedding-day", 
-      max_results: 100,
-    });
+    const files = fs.readdirSync(uploadPath);
 
-    const imageUrls = result.resources.map((image) => ({
-      url: image.secure_url,
-      filename: image.public_id,
+    const imageUrls = files.map((filename) => ({
+      url: `/uploads/${filename}`,
+      filename,
     }));
 
     res.json({ urls: imageUrls });
   } catch (error) {
-    console.error("Erro ao obter as imagens:", error);
-    res.status(500).json({ error: "Erro ao obter as imagens." });
+    console.error("Erro ao listar as imagens:", error);
+    res.status(500).json({ error: "Erro ao listar as imagens." });
   }
 });
+
+// Rota para servir arquivos da pasta 'uploads'
+app.use("/uploads", express.static(uploadPath));
 
 // Iniciar o servidor
 app.listen(PORT, () => {
