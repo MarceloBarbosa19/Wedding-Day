@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Álbum de Fotos do Casamento</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header>
+    <h1>Filipa & Rui - 22/03/2025</h1>
+    <img src="./assets/images/filipa_rui.jpg" alt="filipa_rui" width="250px" height="350px">
+    <p>Na curva da vida e na esquina do tempo, o amor acontece.</p>
+  </header>
+
+  <div class="upload-section">
+    
+    <form id="upload-form" action="/upload" method="POST" enctype="multipart/form-data">
+      <label for="file-input" class="custom-file-label">
+        Escolha suas fotos
+      </label>
+      <input type="file" id="file-input" name="files" accept="image/*" multiple required>
+      <button type="submit" class="custom-btn">Enviar Fotos</button>
+    </form>
+    
+    <p id="status"></p>
+
+    <div class="preview" id="preview"></div>
+  </div>
+  
+  <div class="gallery" id="gallery"></div>
+
+  <script>
+    const fileInput = document.getElementById("file-input");
+    const preview = document.getElementById("preview");
+  
+    fileInput.addEventListener("change", () => {
+      preview.innerHTML = ""; 
+      const files = fileInput.files;
+  
+      if (files.length > 0) {
+        Array.from(files).forEach((file) => {
+          const reader = new FileReader();
+  
+          reader.onload = (event) => {
+            const img = document.createElement("img");
+            img.src = event.target.result;
+            img.alt = "Pré-visualização";
+            preview.appendChild(img);
+          };
+  
+          reader.readAsDataURL(file);
+        });
+      }
+    });
+
+    window.onload = async () => {
+      try {
+        const response = await fetch("/get-images");
+        const result = await response.json();
+
+        if (result.urls && result.urls.length > 0) {
+          const gallery = document.getElementById("gallery");
+          result.urls.forEach((file) => {
+            const img = document.createElement("img");
+            img.src = file.url;
+            img.alt = file.filename;
+            gallery.appendChild(img);
+          });
+        }
+      } catch (error) {
+        console.error("Erro ao carregar as imagens:", error);
+      }
+    };
+  </script>
+  
+</body>
+</html>
