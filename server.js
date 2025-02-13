@@ -29,7 +29,17 @@ const storage = multer.diskStorage({
   },
 });
 
-const upload = multer({ storage });
+const upload = multer({ 
+  storage,
+  fileFilter: (req, file, cb) => {
+    const allowedTypes = ["image/jpeg", "image/png", "image/gif", "video/mp4", "video/webm", "video/ogg"];
+    if (allowedTypes.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error("Apenas imagens e vídeos são permitidos!"));
+    }
+  }
+});
 
 // Rota para upload de múltiplas imagens
 app.post("/upload", upload.array("files", 100), (req, res) => {
@@ -38,32 +48,30 @@ app.post("/upload", upload.array("files", 100), (req, res) => {
   }
 
   try {
-    const uploadedFiles = req.files.map((file) => ({
-      url: `/uploads/${file.filename}`, 
-      filename: file.filename,
-    }));
-
     res.status(200).redirect("/");
   } catch (error) {
-    console.error("Erro ao salvar as imagens:", error);
-    res.status(500).json({ error: "Erro ao salvar as imagens." });
+    console.error("Erro ao salvar os arquivos:", error);
+    res.status(500).json({ error: "Erro ao salvar os arquivos." });
   }
 });
 
 // Rota para obter as imagens já enviadas
-app.get("/get-images", (req, res) => {
+app.get("/get-media", (req, res) => {
   try {
-    const files = fs.readdirSync(uploadPath);
+    const files = fs.readdirSync(uploadPath)
+      .map((filename) => ({
+        filename,
+        url: `/uploads/${filename}`,
+        time: fs.statSync(path.join(uploadPath, filename)).mtime.getTime(),
+        type: filename.match(/\.(mp4|webm|ogg)$/) ? "video" : "image"
+      }))
+      .sort((a, b) => b.time - a.time) // Ordena por data (mais recente primeiro)
+      .slice(0, 10); // Pega apenas os 10 últimos
 
-    const imageUrls = files.map((filename) => ({
-      url: `/uploads/${filename}`,
-      filename,
-    }));
-
-    res.json({ urls: imageUrls });
+    res.json({ media: files });
   } catch (error) {
-    console.error("Erro ao listar as imagens:", error);
-    res.status(500).json({ error: "Erro ao listar as imagens." });
+    console.error("Erro ao listar os arquivos:", error);
+    res.status(500).json({ error: "Erro ao listar os arquivos." });
   }
 });
 
